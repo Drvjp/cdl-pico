@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>多网页查看器</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      background: #f0f0f0;
+    }
+
+    h2 {
+      text-align: center;
+    }
+
+    .container {
+      display: flex;
+      flex-wrap: wrap;
+      padding: 10px;
+      gap: 10px;
+      justify-content: center;
+      position: relative;
+    }
+
+    .add-button {
+      position: fixed;
+      right: 30px;
+      bottom: 30px;
+      width: 50px;
+      height: 50px;
+      background-color: #007bff;
+      color: white;
+      font-size: 30px;
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+      z-index: 999;
+    }
+
+    .box {
+      position: relative;
+      width: 300px;
+      height: 250px;
+      border: 2px solid #ccc;
+      overflow: hidden;
+      transition: transform 0.3s ease;
+      cursor: move;
+      background: white;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .iframe-wrapper {
+      flex-grow: 1;
+      overflow: hidden;
+    }
+
+    .iframe-wrapper iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 5px;
+      background-color: #f9f9f9;
+      border-top: 1px solid #ddd;
+      font-size: 14px;
+    }
+
+    .control-left {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .url-label {
+      font-weight: bold;
+      min-width: 40px;
+    }
+
+    .url-input {
+      flex: 1;
+      padding: 3px;
+      font-size: 12px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      width:50px;
+    }
+
+    .remark-input {
+      flex: 1;
+      padding: 3px;
+      font-size: 12px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      width:100px;
+    }
+
+    .control-btn {
+      margin-left: 5px;
+      padding: 4px 8px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      color: white;
+      font-size: 12px;
+    }
+
+    .btn-refresh { background: #28a745; }
+    .btn-fullscreen { background: #007bff; }
+    .btn-close { background: #dc3545; }
+
+    .fullscreen {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 9999;
+      background: black;
+    }
+
+    .fullscreen .iframe-wrapper iframe {
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+
+<h2>PICO投屏多开</h2>
+
+<div class="container" id="container">
+  <!-- iframe 将动态插入到这里 -->
+</div>
+
+<button class="add-button" onclick="addIframe()">+</button>
+
+<script>
+  const container = document.getElementById('container');
+
+  // 从 localStorage 加载已保存的数据
+  let items = JSON.parse(localStorage.getItem('iframeItems')) || [
+    {id: 'agge', remark: '张三'}
+  ];
+
+  function saveToLocalStorage() {
+    localStorage.setItem('iframeItems', JSON.stringify(items));
+  }
+
+  function createIframe(item) {
+    const box = document.createElement('div');
+    box.className = 'box';
+    box.dataset.id = item.id;
+    box.setAttribute('draggable', true);
+
+    const iframeWrapper = document.createElement('div');
+    iframeWrapper.className = 'iframe-wrapper';
+
+    const iframe = document.createElement('iframe');
+    iframe.src = `https://touping.picoxr.com/${item.id}`; 
+    iframeWrapper.appendChild(iframe);
+    box.appendChild(iframeWrapper);
+
+    // 控制区域
+    const controls = document.createElement('div');
+    controls.className = 'controls';
+
+    // 左侧：地址输入框 + 备注输入框
+    const controlLeft = document.createElement('div');
+    controlLeft.className = 'control-left';
+
+    const urlInput = document.createElement('input');
+    urlInput.type = 'text';
+    urlInput.value = item.id;
+    urlInput.placeholder = "地址";
+    urlInput.className = 'url-input';
+
+    const remarkInput = document.createElement('input');
+    remarkInput.type = 'text';
+    remarkInput.value = item.remark || '';
+    remarkInput.placeholder = "备注";
+    remarkInput.className = 'remark-input';
+
+    controlLeft.appendChild(urlInput);
+    controlLeft.appendChild(remarkInput);
+
+    // 右侧：按钮
+    const refreshBtn = document.createElement('button');
+    refreshBtn.textContent = '更新';
+    refreshBtn.className = 'control-btn btn-refresh';
+    refreshBtn.onclick = () => {
+      iframe.src = iframe.src;
+    };
+
+    const fullscreenBtn = document.createElement('button');
+    fullscreenBtn.textContent = '全屏';
+    fullscreenBtn.className = 'control-btn btn-fullscreen';
+    fullscreenBtn.onclick = () => {
+      if (!document.fullscreenElement) {
+        box.requestFullscreen().catch(err => {
+          alert(`无法进入全屏：${err.message}`);
+        });
+      } else {
+        document.exitFullscreen();
+      }
+    };
+
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '×';
+    closeBtn.className = 'control-btn btn-close';
+    closeBtn.onclick = (e) => {
+      e.stopPropagation();
+      const index = items.findIndex(i => i.id === item.id);
+      if (index !== -1) {
+        items.splice(index, 1);
+        saveToLocalStorage();
+      }
+      container.removeChild(box);
+    };
+
+    controls.appendChild(controlLeft);
+    controls.appendChild(refreshBtn);
+    controls.appendChild(fullscreenBtn);
+    controls.appendChild(closeBtn);
+    box.appendChild(controls);
+
+    // 拖拽事件绑定在整个 box 上
+    box.addEventListener('dragstart', handleDragStart);
+    box.addEventListener('dragover', handleDragOver);
+    box.addEventListener('drop', handleDrop);
+
+    // 阻止按钮区域触发拖拽
+    [refreshBtn, fullscreenBtn, closeBtn, urlInput, remarkInput].forEach(el => {
+      el.addEventListener('dragstart', e => e.stopPropagation());
+    });
+
+    // 保存修改到 localStorage
+    urlInput.addEventListener('change', () => {
+      const index = items.findIndex(i => i.id === item.id);
+      if (index !== -1) {
+        items[index].id = urlInput.value.trim() || 'default';
+        items[index].remark = remarkInput.value.trim() || '';
+        saveToLocalStorage();
+        iframe.src = `https://touping.picoxr.com/${items[index].id}`; 
+        box.dataset.id = items[index].id;
+      }
+    });
+
+    remarkInput.addEventListener('change', () => {
+      const index = items.findIndex(i => i.id === item.id);
+      if (index !== -1) {
+        items[index].remark = remarkInput.value.trim() || '';
+        saveToLocalStorage();
+      }
+    });
+
+    return box;
+  }
+
+  function addIframe() {
+    const newItem = {
+      id: 'new' + Math.floor(Math.random() * 100),
+      remark: ''
+    };
+    items.push(newItem);
+    saveToLocalStorage();
+    const box = createIframe(newItem);
+    container.appendChild(box);
+  }
+
+  // 初始化加载 iframe
+  window.onload = () => {
+    items.forEach(item => {
+      container.appendChild(createIframe(item));
+    });
+  };
+
+  // 拖拽相关函数
+  let dragged;
+
+  function handleDragStart(e) {
+    dragged = this;
+    e.dataTransfer.effectAllowed = 'move';
+  }
+
+  function handleDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }
+
+  function handleDrop(e) {
+    e.preventDefault();
+    if (dragged !== this) {
+      const parent = container;
+      const boxes = Array.from(parent.children);
+      const indexA = boxes.indexOf(dragged);
+      const indexB = boxes.indexOf(this);
+
+      // 调整 DOM 顺序
+      if (indexA < indexB) {
+        parent.insertBefore(dragged, this.nextSibling);
+      } else {
+        parent.insertBefore(dragged, this);
+      }
+
+      // 更新 items 数组顺序
+      const temp = items[indexA];
+      items[indexA] = items[indexB];
+      items[indexB] = temp;
+
+      saveToLocalStorage();
+    }
+  }
+</script>
+
+</body>
+</html>
